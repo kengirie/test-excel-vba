@@ -1,0 +1,78 @@
+Private Declare PtrSafe Function OpenClipboard Lib "user32" (ByVal hwnd As LongPtr) As Long
+Private Declare PtrSafe Function EmptyClipboard Lib "user32" () As Long
+Private Declare PtrSafe Function CloseClipboard Lib "user32" () As Long
+Private Declare PtrSafe Function IsClipboardFormatAvailable Lib "user32" (ByVal wFormat As Long) As Long
+
+Public IsWatching As Boolean
+
+Sub ToggleAutoPaste()
+    Dim shp As Shape
+    Dim nextRow As Long
+    Dim pasted As Boolean
+    Dim retry As Integer
+   
+    If IsWatching = True Then
+        IsWatching = False
+        Application.StatusBar = False
+        MsgBox "連続スクショ監視を【停止】しました。", vbInformation
+        Exit Sub
+    End If
+   
+    IsWatching = True
+   
+    ' 開始時にクリップボードを空にする
+    If OpenClipboard(0) <> 0 Then
+        EmptyClipboard
+        CloseClipboard
+    End If
+   
+    Application.StatusBar = "【連続スクショ監視中...】終了時は同じキーを押してください"
+    MsgBox "連続スクショ監視を【開始】しました！", vbInformation
+   
+    Do While IsWatching
+        DoEvents
+       
+        ' クリップボードに画像が入ったかチェック
+        If IsClipboardFormatAvailable(2) <> 0 Or IsClipboardFormatAvailable(8) <> 0 Then
+           
+            Application.Wait [Now() + "0:00:00.5"]
+           
+            pasted = False
+            For retry = 1 To 5
+                On Error Resume Next
+                Err.Clear
+                ActiveSheet.Paste
+                If Err.Number = 0 Then
+                    pasted = True
+                    On Error GoTo 0
+                    Exit For
+                End If
+                On Error GoTo 0
+                Application.Wait [Now() + "0:00:00.3"]
+            Next retry
+           
+            ' 無事に貼り付いた場合のみ枠線をつけて次の行へ移動
+            If pasted Then
+                Set shp = ActiveSheet.Shapes(ActiveSheet.Shapes.Count)
+               
+                ' ※サイズ変更（Width = 400）を削除し、原寸サイズのままにします
+               
+                ' 薄いグレーの枠線をつける（不要な場合はこの2行を削除）
+                shp.Line.Visible = msoTrue
+                shp.Line.ForeColor.RGB = RGB(200, 200, 200)
+               
+                ' 画像の下端の行番号から「3行空けた」下のセルへ移動（+ 4 にすると3行空きになります）
+                nextRow = shp.BottomRightCell.Row + 4
+                Cells(nextRow, ActiveCell.Column).Select
+            End If
+           
+            ' クリップボードを空にして次の撮影を待つ
+            If OpenClipboard(0) <> 0 Then
+                EmptyClipboard
+                CloseClipboard
+            End If
+        End If
+    Loop
+   
+    Application.StatusBar = False
+End Sub
